@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>共鸣回廊 | Co-Echo - 声音实验室</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="./assets/index-cRmeBaFs.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-C7gwEZDu.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 头部栏 -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="logo-icon"></span>
+        <div class="brand-text">
+          <h1>共鸣回廊</h1>
+          <span class="subtitle">Co-Echo</span>
+        </div>
+      </div>
+      <div class="room-status-group">
+        <div class="room-badge">
+          <span class="status-dot pulsing"></span>
+          <span id="room-status-text">待激活实验室</span>
+        </div>
+        <div id="recording-badge" class="recording-badge hidden">
+          <span class="rec-dot"></span>
+          <span>录制中</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <main class="app-main">
+      <!-- 左侧控制面板 -->
+      <section class="panel control-panel">
+        <div class="panel-section">
+          <h2>控制台 / CONSOLE</h2>
+          <p class="panel-desc">激活音频上下文以开启声音共创空间。</p>
+          <button id="btn-toggle-audio" class="btn btn-primary">
+            <span id="btn-text">激活共鸣空间</span>
+          </button>
+        </div>
+
+        <div class="panel-section">
+          <h2>素材创作 / CREATION</h2>
+          <p class="panel-desc">录制一段你的声音（最多3秒）替换为“氮 / VOICE”元素。</p>
+          <button id="btn-record-mic" class="btn btn-secondary" disabled>
+            <span id="btn-mic-text">录制人声片段</span>
+          </button>
+        </div>
+
+        <div class="panel-section">
+          <h2>作品输出 / EXPORT</h2>
+          <p class="panel-desc">将当前的共鸣混音录制并保存为本地音频文件。</p>
+          <button id="btn-export-recording" class="btn btn-secondary" disabled>
+            <span id="btn-export-text">开始录制作品</span>
+          </button>
+        </div>
+
+        <div class="panel-section">
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>合成心率 (BPM)</span>
+              <span id="val-bpm" class="val-tag">90</span>
+            </div>
+            <input type="range" id="slider-bpm" min="60" max="150" value="90" disabled>
+          </div>
+
+          <div class="select-group">
+            <label for="select-scale">音阶 (Scale)</label>
+            <select id="select-scale" disabled>
+              <option value="major-pentatonic">C 大调五声 (五声音阶)</option>
+              <option value="minor-pentatonic">A 小调五声 (极简沉静)</option>
+              <option value="lydian">F Lydian (太空冷调)</option>
+              <option value="dorian">D Dorian (古典调式)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-section visualizer-container">
+          <h3>频谱信号</h3>
+          <div class="visualizer-bars" id="visualizer-bars">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 中间空间沙盘 -->
+      <section class="sandbox-area">
+        <div class="sandbox-container" id="sandbox">
+          <canvas id="connection-canvas"></canvas>
+          
+          <!-- 沙盘同心环背景线 -->
+          <div class="orbital-ring ring-1"></div>
+          <div class="orbital-ring ring-2"></div>
+          <div class="orbital-ring ring-3"></div>
+
+          <!-- 聆听者（中心点） -->
+          <div id="listener" class="listener-node">
+            <div class="pulse-ring"></div>
+            <div class="listener-dot"></div>
+          </div>
+
+          <!-- 声音化学元素气泡 -->
+          <!-- 氢元素 (Beat) -->
+          <div class="element" id="el-beat" style="left: 20%; top: 25%;" data-type="beat">
+            <div class="el-inner">
+              <span class="el-symbol">H</span>
+              <span class="el-name">氢 / BEAT</span>
+              <span class="el-user-tag">用户A</span>
+            </div>
+            <div class="el-pulse"></div>
+          </div>
+
+          <!-- 氧元素 (Melody) -->
+          <div class="element" id="el-melody" style="left: 80%; top: 30%;" data-type="melody">
+            <div class="el-inner">
+              <span class="el-symbol">O</span>
+              <span class="el-name">氧 / MELODY</span>
+              <span class="el-user-tag">用户B</span>
+            </div>
+            <div class="el-pulse"></div>
+          </div>
+
+          <!-- 氮元素 (Voice) -->
+          <div class="element" id="el-voice" style="left: 30%; top: 75%;" data-type="voice">
+            <div class="el-inner">
+              <span class="el-symbol">N</span>
+              <span class="el-name">氮 / VOICE</span>
+              <span class="el-user-tag">你</span>
+            </div>
+            <div class="el-pulse"></div>
+          </div>
+
+          <!-- 碳元素 (Ambient) -->
+          <div class="element" id="el-ambient" style="left: 70%; top: 70%;" data-type="ambient">
+            <div class="el-inner">
+              <span class="el-symbol">C</span>
+              <span class="el-name">碳 / AMBIENT</span>
+              <span class="el-user-tag">模拟</span>
+            </div>
+            <div class="el-pulse"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右侧炼金日志 -->
+      <section class="panel info-panel">
+        <div class="panel-section">
+          <h2>系统日志 / LOG</h2>
+          <div class="log-container" id="log-container">
+            <div class="log-item system">系统已就绪。请双耳佩戴耳机激活共鸣空间。</div>
+          </div>
+        </div>
+
+        <div class="panel-section chemistry-rules">
+          <h3>合成反应规则</h3>
+          <div class="rule-card">
+            <span class="formula">H + O = 律动分子</span>
+            <p>当节奏与旋律拉近时，触发 AI 生成低音 Bassline 粘合节奏。</p>
+          </div>
+          <div class="rule-card">
+            <span class="formula">N + C = 冥想空间</span>
+            <p>人声进入环境氛围中，背景氛围音将配合呼吸做低频慢阻尼抖动。</p>
+          </div>
+          <div class="rule-card">
+            <span class="formula">H + O + N + C = 完美共鸣</span>
+            <p>四种元素在近距离汇聚，音效融合，粒子环绕效果达到顶峰。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 底部使用说明 -->
+    <footer class="app-footer">
+      <div class="tips">
+        交互说明：开启空间后，用鼠标/手指拖动沙盘上的四个元素气泡。
+        离中心监听者越近音量越高，左右偏移改变耳机的左右声道。拉近元素互相碰撞可解锁新的伴奏。
+      </div>
+    </footer>
+  </div>
+
+</body>
+</html>
