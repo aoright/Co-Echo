@@ -19,6 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExportRecording = document.getElementById('btn-export-recording');
   const btnExportText = document.getElementById('btn-export-text');
   
+  // AI 节点获取
+  const aiPromptInput = document.getElementById('ai-prompt-input');
+  const aiKeyInput = document.getElementById('ai-key-input');
+  const btnAiTune = document.getElementById('btn-ai-tune');
+  const btnAiText = document.getElementById('btn-ai-text');
+  
   const roomStatusText = document.getElementById('room-status-text');
   const statusDot = document.querySelector('.status-dot');
   const recordingBadge = document.getElementById('recording-badge');
@@ -95,6 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
         selectScale.removeAttribute('disabled');
         btnRecordMic.removeAttribute('disabled');
         btnExportRecording.removeAttribute('disabled');
+        aiPromptInput.removeAttribute('disabled');
+        aiKeyInput.removeAttribute('disabled');
+        btnAiTune.removeAttribute('disabled');
         
         addLog("[系统] 共鸣空间已激活。Web Audio 合成引擎已就绪。", "system");
         
@@ -129,12 +138,132 @@ document.addEventListener('DOMContentLoaded', () => {
       selectScale.setAttribute('disabled', 'true');
       btnRecordMic.setAttribute('disabled', 'true');
       btnExportRecording.setAttribute('disabled', 'true');
+      aiPromptInput.setAttribute('disabled', 'true');
+      aiKeyInput.setAttribute('disabled', 'true');
+      btnAiTune.setAttribute('disabled', 'true');
       
       addLog("[系统] 共鸣空间已暂停。声音流已释放。", "system");
       
       Object.values(elements).forEach(el => el.classList.remove('active'));
       renderer.clear();
     }
+  });
+
+  // 新增：AI 声音调剂控制 (Alibaba Cloud Qwen-Plus Integration)
+  btnAiTune.addEventListener('click', () => {
+    if (!engine.isPlaying) return;
+    
+    const prompt = aiPromptInput.value.trim();
+    const apiKey = aiKeyInput.value.trim();
+    
+    if (!prompt) {
+      addLog("[AI调剂] 请先输入你想表达的听觉场景或心情状态。", "system");
+      return;
+    }
+    
+    if (!apiKey) {
+      addLog("[AI调剂] 请填写有效的百炼 API Key 密钥。", "system");
+      return;
+    }
+    
+    btnAiTune.setAttribute('disabled', 'true');
+    btnAiText.textContent = "AI 调配中...";
+    addLog("[AI调剂] 正在呼唤 Qwen-Plus 声音化学家调剂音景...", "system");
+    
+    fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'qwen-plus',
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个声音化学调剂师。请根据用户描述的情绪或场景，返回一个描述听觉感受的 JSON 对象。不能包含任何 markdown 标记（如 ```json 等），只返回纯文本 JSON。\n\nJSON 格式规范：\n{\n  "bpm": 60到150之间的整数,\n  "scale": "major-pentatonic" 或 "minor-pentatonic" 或 "lydian" 或 "dorian",\n  "positions": {\n    "beat": {"x": 15到85的整数, "y": 15到85的整数},\n    "melody": {"x": 15到85的整数, "y": 15到85的整数},\n    "voice": {"x": 15到85的整数, "y": 15到85的整数},\n    "ambient": {"x": 15到85的整数, "y": 15到85的整数}\n  },\n  "poem": "用不超过30字描述该情绪的治愈诗句（无标点，适合TTS朗读）"\n}'
+          },
+          {
+            role: 'user',
+            content: `用户的场景描述为：${prompt}`
+          }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP 异常状态 ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(res => {
+      const rawText = res.choices[0].message.content.trim();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        data = JSON.parse(cleanedText);
+      }
+      
+      // 更新系统参数
+      if (data.bpm) {
+        sliderBpm.value = data.bpm;
+        valBpm.textContent = data.bpm;
+        engine.bpm = data.bpm;
+      }
+      if (data.scale) {
+        selectScale.value = data.scale;
+        engine.currentScale = data.scale;
+      }
+      
+      // 更新气泡 target 位置，自动触发滑行动画
+      if (data.positions) {
+        Object.entries(data.positions).forEach(([key, pos]) => {
+          if (bubblePhysics[key]) {
+            bubblePhysics[key].targetX = pos.x;
+            bubblePhysics[key].targetY = pos.y;
+          }
+        });
+      }
+      
+      addLog(`[AI诗句] "${data.poem}"`, "chemical");
+      addLog("[AI调剂] 声场调谐完毕，正在朗诵情绪诗歌...", "interaction");
+
+      // 情绪朗诵 TTS (Web Speech API)
+      if (data.poem && ('speechSynthesis' in window)) {
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(data.poem);
+        utterance.lang = 'zh-CN';
+        utterance.rate = 0.85; 
+        
+        utterance.onstart = () => {
+          elements.voice.classList.add('speaking');
+        };
+        
+        utterance.onend = () => {
+          elements.voice.classList.remove('speaking');
+        };
+        
+        utterance.onerror = () => {
+          elements.voice.classList.remove('speaking');
+        };
+        
+        window.speechSynthesis.speak(utterance);
+      } else {
+        addLog("[系统] 当前浏览器不支持语音朗读功能。", "system");
+      }
+
+      btnAiTune.removeAttribute('disabled');
+      btnAiText.textContent = "智能调谐声场";
+    })
+    .catch(err => {
+      addLog(`[AI调剂失败] ${err.message}`, "system");
+      btnAiTune.removeAttribute('disabled');
+      btnAiText.textContent = "智能调谐声场";
+    });
   });
 
   // 2. 麦克风录音控制

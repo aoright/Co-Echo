@@ -61,6 +61,19 @@
         </div>
 
         <div class="panel-section">
+          <h2>AI 调剂 / AI ALCHEMIST</h2>
+          <p class="panel-desc">输入情绪或场景，由 Qwen 智能调配沙盘坐标并合成治愈短诗。</p>
+          <textarea id="ai-prompt-input" class="textarea-field" placeholder="例如：深夜大雨中的孤独、清晨海滩的阳光..." disabled></textarea>
+          <div class="input-group">
+            <label for="ai-key-input">API Key</label>
+            <input type="password" id="ai-key-input" class="input-field" value="" placeholder="填入百炼 API Key" disabled>
+          </div>
+          <button id="btn-ai-tune" class="btn btn-secondary" disabled>
+            <span id="btn-ai-text">智能调谐声场</span>
+          </button>
+        </div>
+
+        <div class="panel-section">
           <div class="slider-group">
             <div class="slider-label">
               <span>合成心率 (BPM)</span>
