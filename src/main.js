@@ -236,70 +236,137 @@ document.addEventListener('DOMContentLoaded', () => {
       addLog(`[AI诗句] "${data.poem}"`, "chemical");
       addLog("[AI调剂] 声场调谐完毕，正在朗诵情绪诗歌...", "interaction");
 
-      // 情绪朗诵 TTS (Web Speech API)
-      if (data.poem && ('speechSynthesis' in window)) {
-        if (ttsTimeout) {
-          clearTimeout(ttsTimeout);
-          ttsTimeout = null;
-        }
-        try {
-          window.speechSynthesis.cancel();
-        } catch (e) {
-          console.warn("speechSynthesis cancel failed:", e);
-        }
+      // 情绪朗诵 TTS
+      if (data.poem) {
+        const apiKey = aiKeyInput.value.trim();
+        
+        // 声明系统本地 TTS 降级朗读逻辑
+        const playLocalTTS = () => {
+          if ('speechSynthesis' in window) {
+            if (ttsTimeout) {
+              clearTimeout(ttsTimeout);
+              ttsTimeout = null;
+            }
+            try {
+              window.speechSynthesis.cancel();
+            } catch (e) {}
 
-        const endSpeech = (reason) => {
-          if (ttsTimeout) {
-            clearTimeout(ttsTimeout);
-            ttsTimeout = null;
-          }
-          elements.voice.classList.remove('speaking');
-          activeUtterance = null;
-          if (reason === 'timeout') {
-            addLog("[AI调剂] 语音朗读未响应（已跳过，恢复声场交互）。", "system");
-          } else if (reason === 'error') {
-            addLog("[AI调剂] 语音朗读出错（已跳过，恢复声场交互）。", "system");
+            const endSpeech = (reason) => {
+              if (ttsTimeout) {
+                clearTimeout(ttsTimeout);
+                ttsTimeout = null;
+              }
+              elements.voice.classList.remove('speaking');
+              activeUtterance = null;
+              if (reason === 'timeout') {
+                addLog("[AI调剂] 语音朗读未响应（已跳过，恢复声场交互）。", "system");
+              } else if (reason === 'error') {
+                addLog("[AI调剂] 语音朗读出错（已跳过，恢复声场交互）。", "system");
+              } else {
+                addLog("[AI调剂] 诗歌朗诵完毕。", "interaction");
+              }
+            };
+
+            activeUtterance = new SpeechSynthesisUtterance(data.poem);
+            activeUtterance.lang = 'zh-CN';
+            activeUtterance.rate = 0.85;
+
+            activeUtterance.onstart = () => {
+              elements.voice.classList.add('speaking');
+            };
+
+            activeUtterance.onend = () => {
+              endSpeech('done');
+            };
+
+            activeUtterance.onerror = (e) => {
+              console.error("TTS Error:", e);
+              endSpeech('error');
+            };
+
+            const expectedDuration = Math.max(6000, data.poem.length * 400 + 2000);
+            ttsTimeout = setTimeout(() => {
+              endSpeech('timeout');
+              try {
+                window.speechSynthesis.cancel();
+              } catch (e) {}
+            }, expectedDuration);
+
+            try {
+              window.speechSynthesis.speak(activeUtterance);
+              if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+              }
+            } catch (e) {
+              console.error("speechSynthesis speak failed:", e);
+              endSpeech('error');
+            }
           } else {
-            addLog("[AI调剂] 诗歌朗诵完毕。", "interaction");
+            addLog("[系统] 当前浏览器不支持语音朗读功能。", "system");
           }
         };
 
-        activeUtterance = new SpeechSynthesisUtterance(data.poem);
-        activeUtterance.lang = 'zh-CN';
-        activeUtterance.rate = 0.85;
-
-        activeUtterance.onstart = () => {
-          elements.voice.classList.add('speaking');
-        };
-
-        activeUtterance.onend = () => {
-          endSpeech('done');
-        };
-
-        activeUtterance.onerror = (e) => {
-          console.error("TTS Error:", e);
-          endSpeech('error');
-        };
-
-        const expectedDuration = Math.max(6000, data.poem.length * 400 + 2000);
-        ttsTimeout = setTimeout(() => {
-          endSpeech('timeout');
-          try {
-            window.speechSynthesis.cancel();
-          } catch (e) {}
-        }, expectedDuration);
-
-        try {
-          window.speechSynthesis.speak(activeUtterance);
-          if (window.speechSynthesis.paused) {
-            window.speechSynthesis.resume();
-          }
-        } catch (e) {
-          console.error("speechSynthesis speak failed:", e);
-          endSpeech('error');
+        // 如果用户填写了 API Key，则使用智能生成高品质人声模型（CosyVoice）
+        if (apiKey && apiKey.startsWith("sk-")) {
+          addLog("[AI调剂] 正在渲染阿里云百炼高清治愈系人声（CosyVoice）...", "system");
+          
+          fetch("https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: "cosyvoice-v1",
+              input: {
+                text: data.poem
+              },
+              parameters: {
+                voice: "longxiaochun", // 温柔自然的治愈系少女音色
+                format: "wav",
+                sample_rate: 24000
+              }
+            })
+          })
+          .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
+          .then(result => {
+            if (result.output && result.output.url) {
+              return fetch(result.output.url);
+            } else {
+              throw new Error("模型未返回音频 URL");
+            }
+          })
+          .then(audioRes => {
+            if (!audioRes.ok) throw new Error("获取音频文件失败");
+            return audioRes.arrayBuffer();
+          })
+          .then(arrayBuffer => {
+            return engine.audioCtx.decodeAudioData(arrayBuffer);
+          })
+          .then(audioBuffer => {
+            addLog("[AI调剂] 渲染完毕。已通过 3D 空间音频通道播报治愈诗歌。", "interaction");
+            engine.playAIVoice(
+              audioBuffer,
+              () => {
+                elements.voice.classList.add('speaking');
+              },
+              () => {
+                elements.voice.classList.remove('speaking');
+              }
+            );
+          })
+          .catch(err => {
+            console.warn("CosyVoice API failed, falling back to local SpeechSynthesis:", err);
+            addLog("[AI调剂] 阿里云语音渲染失败，已自动降级为系统本地机器朗读。", "system");
+            playLocalTTS();
+          });
+        } else {
+          // 未提供有效的 API Key，降级使用浏览器自带的 TTS 朗读
+          playLocalTTS();
         }
-      } else {
-        addLog("[系统] 当前浏览器不支持语音朗读功能。", "system");
       }
 
       btnAiTune.removeAttribute('disabled');

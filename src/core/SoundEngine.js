@@ -38,6 +38,7 @@ export class SoundEngine {
     this.recordingDest = null;
     this.micRecordedBuffer = null;
     this.voiceBufferSource = null;
+    this.aiVoiceSource = null;
     
     // 调度时钟参数
     this.schedulerTimer = null;
@@ -275,6 +276,34 @@ export class SoundEngine {
       this.voiceBufferSource.connect(this.nodes.voice.panner);
       this.voiceBufferSource.start();
     }
+  }
+
+  /**
+   * 播放一首高品质 AI TTS 短诗，并进行三维空间定位与开口动画关联
+   * @param {AudioBuffer} audioBuffer 解码后的音频缓冲
+   * @param {Function} onStart 播放开始回调
+   * @param {Function} onEnded 播放结束回调
+   */
+  playAIVoice(audioBuffer, onStart, onEnded) {
+    if (!this.isPlaying || !this.audioCtx) return;
+
+    // 如果当前有正在播放的人声，先停止它
+    if (this.aiVoiceSource) {
+      try { this.aiVoiceSource.stop(); } catch (e) {}
+      this.aiVoiceSource.disconnect();
+    }
+
+    this.aiVoiceSource = this.audioCtx.createBufferSource();
+    this.aiVoiceSource.buffer = audioBuffer;
+    this.aiVoiceSource.connect(this.nodes.voice.panner);
+
+    this.aiVoiceSource.onended = () => {
+      if (onEnded) onEnded();
+      this.aiVoiceSource = null;
+    };
+
+    if (onStart) onStart();
+    this.aiVoiceSource.start();
   }
 
   stopContinuousSounds() {
