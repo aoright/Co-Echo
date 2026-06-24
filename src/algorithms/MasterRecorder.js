@@ -25,6 +25,9 @@ export class MasterRecorder {
 
   /**
    * 开启混音总线 PCM 采集。
+   * 采用桥接模式：断开 sourceNode -> destination，
+   * 串联 sourceNode -> scriptNode -> destination。
+   * 并将输入 PCM 数据拷贝至输出，从而保持网页发声并维持 onaudioprocess 的活跃触发。
    * 
    * @returns {boolean} 是否启动成功
    */
@@ -40,19 +43,37 @@ export class MasterRecorder {
     this.scriptNode = this.audioCtx.createScriptProcessor(bufferSize, 2, 2);
 
     this.scriptNode.onaudioprocess = (e) => {
-      if (!this.isRecording) return;
       const left = e.inputBuffer.getChannelData(0);
       const right = e.inputBuffer.getChannelData(1);
 
-      // 克隆数据，防止共享内存块被浏览器下一帧重写
-      this.leftChannel.push(new Float32Array(left));
-      this.rightChannel.push(new Float32Array(right));
-      this.recordingLength += left.length;
+      if (this.isRecording) {
+        // 克隆数据，防止共享内存块被浏览器下一帧重写
+        this.leftChannel.push(new Float32Array(left));
+        this.rightChannel.push(new Float32Array(right));
+        this.recordingLength += left.length;
+      }
 
-      // 输出缓冲区默认为静音，防止音频串扰导致音量加倍
+      // 将输入数据拷贝到输出数据，以保持音频直通播放，同时激活并维持 onaudioprocess 触发
+      const outputL = e.outputBuffer.getChannelData(0);
+      const outputR = e.outputBuffer.getChannelData(1);
+      outputL.set(left);
+      outputR.set(right);
     };
 
-    // 路由连接：源节点 -> 录音节点 -> 物理输出（驱动音频拉取线程）
+    // 调整路由拓扑：
+    // 1. 断开源节点直接输出到扬声器的物理连接，防范某些浏览器下直接输出与桥接输出叠加导致的声音变大
+    try {
+      this.sourceNode.disconnect(this.audioCtx.destination);
+    } catch (err) {
+      // 容错：全断开
+      try {
+        this.sourceNode.disconnect();
+      } catch (innerErr) {
+        console.warn("sourceNode disconnect failed:", innerErr);
+      }
+    }
+
+    // 2. 将录制节点作为桥接器串接在中间：源节点 -> 录制节点 -> 扬声器
     this.sourceNode.connect(this.scriptNode);
     this.scriptNode.connect(this.audioCtx.destination);
 
@@ -62,6 +83,7 @@ export class MasterRecorder {
 
   /**
    * 停止采集并触发 WAV 报头包装逻辑。
+   * 还原路由拓扑：断开 scriptNode，将 sourceNode 直接重新连接至 destination，恢复网页声音。
    * 
    * @returns {Promise<Blob>} 标准 WAV 音频 Blob 数据
    */
@@ -74,10 +96,26 @@ export class MasterRecorder {
 
       this.isRecording = false;
 
-      // 断开音频图连接，释放内存
-      this.sourceNode.disconnect(this.scriptNode);
-      this.scriptNode.disconnect(this.audioCtx.destination);
+      // 还原路由拓扑：
+      // 1. 断开桥接连接
+      try {
+        this.sourceNode.disconnect(this.scriptNode);
+      } catch (err) {
+        try {
+          this.sourceNode.disconnect();
+        } catch (innerErr) {
+          console.warn("sourceNode disconnect failed in stop:", innerErr);
+        }
+      }
+      try {
+        this.scriptNode.disconnect(this.audioCtx.destination);
+      } catch (err) {
+        console.warn("scriptNode disconnect failed:", err);
+      }
       this.scriptNode = null;
+
+      // 2. 重新将源节点连接至扬声器，恢复网页直接播放声音
+      this.sourceNode.connect(this.audioCtx.destination);
 
       // 合并分段音频帧
       const leftBuffer = this.mergeBuffers(this.leftChannel, this.recordingLength);
@@ -164,7 +202,7 @@ export class MasterRecorder {
   }
 
   /**
-   * 触发浏览器文件下载。
+   * 触发浏览器 file 下载。
    * 
    * @param {Blob} blob WAV 音频数据 Blob
    * @param {string} filename 保存的文件名
