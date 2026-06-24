@@ -68,6 +68,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let micTimeout = null;
   let isRecordingMic = false;
 
+  // 语音合成（TTS）全局变量保护与超时看门狗
+  let activeUtterance = null;
+  let ttsTimeout = null;
+
   // 初始化 Canvas 尺寸
   function resize() {
     sandboxRect = sandbox.getBoundingClientRect();
@@ -233,25 +237,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 情绪朗诵 TTS (Web Speech API)
       if (data.poem && ('speechSynthesis' in window)) {
-        window.speechSynthesis.cancel();
-        
-        const utterance = new SpeechSynthesisUtterance(data.poem);
-        utterance.lang = 'zh-CN';
-        utterance.rate = 0.85; 
-        
-        utterance.onstart = () => {
+        if (ttsTimeout) {
+          clearTimeout(ttsTimeout);
+          ttsTimeout = null;
+        }
+        try {
+          window.speechSynthesis.cancel();
+        } catch (e) {
+          console.warn("speechSynthesis cancel failed:", e);
+        }
+
+        const endSpeech = (reason) => {
+          if (ttsTimeout) {
+            clearTimeout(ttsTimeout);
+            ttsTimeout = null;
+          }
+          elements.voice.classList.remove('speaking');
+          activeUtterance = null;
+          if (reason === 'timeout') {
+            addLog("[AI调剂] 语音朗读未响应（已跳过，恢复声场交互）。", "system");
+          } else if (reason === 'error') {
+            addLog("[AI调剂] 语音朗读出错（已跳过，恢复声场交互）。", "system");
+          } else {
+            addLog("[AI调剂] 诗歌朗诵完毕。", "interaction");
+          }
+        };
+
+        activeUtterance = new SpeechSynthesisUtterance(data.poem);
+        activeUtterance.lang = 'zh-CN';
+        activeUtterance.rate = 0.85;
+
+        activeUtterance.onstart = () => {
           elements.voice.classList.add('speaking');
         };
-        
-        utterance.onend = () => {
-          elements.voice.classList.remove('speaking');
+
+        activeUtterance.onend = () => {
+          endSpeech('done');
         };
-        
-        utterance.onerror = () => {
-          elements.voice.classList.remove('speaking');
+
+        activeUtterance.onerror = (e) => {
+          console.error("TTS Error:", e);
+          endSpeech('error');
         };
-        
-        window.speechSynthesis.speak(utterance);
+
+        const expectedDuration = Math.max(6000, data.poem.length * 400 + 2000);
+        ttsTimeout = setTimeout(() => {
+          endSpeech('timeout');
+          try {
+            window.speechSynthesis.cancel();
+          } catch (e) {}
+        }, expectedDuration);
+
+        try {
+          window.speechSynthesis.speak(activeUtterance);
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        } catch (e) {
+          console.error("speechSynthesis speak failed:", e);
+          endSpeech('error');
+        }
       } else {
         addLog("[系统] 当前浏览器不支持语音朗读功能。", "system");
       }
