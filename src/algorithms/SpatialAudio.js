@@ -18,10 +18,11 @@ export class SpatialAudio {
    * @returns {{x: number, y: number}} 归一化后的相对笛卡尔坐标
    */
   static normalizeCoordinates(pX, pY, cX, cY, radius) {
+    const r = radius <= 0 ? 240 : radius;
     return {
-      x: (pX - cX) / radius,
+      x: (pX - cX) / r,
       // 笛卡尔坐标系中Y轴向上，而屏幕坐标系中Y轴向下，故取反
-      y: -(pY - cY) / radius
+      y: -(pY - cY) / r
     };
   }
 
@@ -38,11 +39,12 @@ export class SpatialAudio {
    * @returns {number} 归一化增益值 [0, 1]，0代表静音，1代表满音量
    */
   static calculateDistanceGain(pX, pY, cX, cY, maxAllowedRadius) {
+    const r = maxAllowedRadius <= 0 ? 200 : maxAllowedRadius;
     const dx = pX - cX;
     const dy = pY - cY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    let gain = Math.max(0, 1 - (distance / maxAllowedRadius));
+    let gain = Math.max(0, 1 - (distance / r));
     // 采用指数次幂 1.5 对线性衰减进行修正，以符合人类双耳对响度的对数级感知
     return Math.pow(gain, 1.5);
   }

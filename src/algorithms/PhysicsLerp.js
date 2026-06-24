@@ -41,14 +41,17 @@ export class PhysicsLerp {
    * @returns {{x: number, y: number, isClamped: boolean}} 限制后的绝对坐标与是否触界标志
    */
   static clampToCircle(x, y, centerX, centerY, maxRadius) {
+    const r = maxRadius <= 0 ? 200 : maxRadius;
     const dx = x - centerX;
     const dy = y - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance > maxRadius) {
+    if (distance > r) {
+      // 避免除以 0
+      const dist = distance === 0 ? 1 : distance;
       return {
-        x: centerX + (dx / distance) * maxRadius,
-        y: centerY + (dy / distance) * maxRadius,
+        x: centerX + (dx / dist) * r,
+        y: centerY + (dy / dist) * r,
         isClamped: true
       };
     }

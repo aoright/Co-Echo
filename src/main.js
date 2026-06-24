@@ -82,10 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
   resize();
   window.addEventListener('resize', resize);
 
-  // 1. 启停控制总按钮
   btnToggleAudio.addEventListener('click', () => {
     if (!engine.isPlaying) {
       try {
+        // 在激活引擎时强制重新计算沙盘尺寸，防止页面初次加载布局尚未完成时尺寸获取为 0 的问题
+        resize();
         engine.init();
         engine.bpm = parseInt(sliderBpm.value);
         engine.currentScale = selectScale.value;
@@ -436,11 +437,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function dragMove(e) {
     if (!dragKey) return;
+    // 阻止移动端的默认滑动行为（如页面滚动）
+    e.preventDefault();
 
     let clientX, clientY;
-    if (e.touches) {
+    // 安全检测 touches 和 changedTouches，防止在某些多端/混合设备上因 touches 列表为空导致 TypeError
+    if (e.touches && e.touches.length > 0) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
     } else {
       clientX = e.clientX;
       clientY = e.clientY;
