@@ -91,8 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
         engine.bpm = parseInt(sliderBpm.value);
         engine.currentScale = selectScale.value;
         
-        // 绑定主总线录音器
-        masterRecorder = new MasterRecorder(engine.recordingDest);
+        // 绑定主总线录音器，传入 analyser 节点以捕获完整的音频数据流
+        masterRecorder = new MasterRecorder(engine.analyser);
 
         btnToggleAudio.classList.remove('btn-primary');
         btnToggleAudio.classList.add('btn-stop');
@@ -387,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function stopMasterRecordingHelper() {
     masterRecorder.stop()
       .then(blob => {
-        MasterRecorder.triggerDownload(blob, 'Co-Echo_声音化学作品.webm');
+        MasterRecorder.triggerDownload(blob, 'Co-Echo_声音化学作品.wav');
         btnExportRecording.classList.remove('btn-recording');
         btnExportRecording.classList.add('btn-secondary');
         btnExportText.textContent = "开始录制作品";
