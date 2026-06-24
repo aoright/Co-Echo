@@ -67,9 +67,21 @@ export class SpatialAudio {
     const posX = normX * spatialScale;
     const posZ = -normY * spatialScale; // Z轴为前后纵深
 
-    // 使用 AudioParam.setValueAtTime 平滑设定以避免声学咔哒声（click）
-    pannerNode.positionX.setValueAtTime(posX, now);
-    pannerNode.positionY.setValueAtTime(0, now);
-    pannerNode.positionZ.setValueAtTime(posZ, now);
+    // 优先使用标准 W3C AudioParam 属性，支持平滑过渡
+    if (pannerNode.positionX && typeof pannerNode.positionX.setValueAtTime === 'function') {
+      try {
+        pannerNode.positionX.setValueAtTime(posX, now);
+        pannerNode.positionY.setValueAtTime(0, now);
+        pannerNode.positionZ.setValueAtTime(posZ, now);
+        return;
+      } catch (e) {
+        console.warn("setValueAtTime failed, fallback to setPosition:", e);
+      }
+    }
+
+    // 兼容 Safari 的旧版 setPosition 方法
+    if (typeof pannerNode.setPosition === 'function') {
+      pannerNode.setPosition(posX, 0, posZ);
+    }
   }
 }

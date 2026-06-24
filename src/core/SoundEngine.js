@@ -63,6 +63,11 @@ export class SoundEngine {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     this.audioCtx = new AudioContext();
     
+    // 显式激活 AudioContext 状态，确保在 macOS/iOS 等严格安全沙箱中能正常播放声音
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
+    }
+    
     this.analyser = this.audioCtx.createAnalyser();
     this.analyser.fftSize = 64;
     this.analyser.connect(this.audioCtx.destination);
