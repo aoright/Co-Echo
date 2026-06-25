@@ -52,6 +52,14 @@ export class SoundEngine {
     };
 
     this.noiseBuffer = null;
+    this.currentMeasure = 0;
+    this.customAmbientBuffer = null;
+    this.activePresets = {
+      beat: 'minimal',
+      melody: 'ethereal',
+      chord: 'heal',
+      ambient: 'respiration'
+    };
   }
 
   /**
@@ -245,37 +253,80 @@ export class SoundEngine {
     const stepDuration = secondsPerBeat / 4;
     this.nextStepTime += stepDuration;
     this.currentStep = (this.currentStep + 1) % 16;
+    if (this.currentStep === 0) {
+      this.currentMeasure = (this.currentMeasure + 1) % 4;
+    }
   }
 
   scheduleStep(step, time) {
-    // A. 节奏合成触发 (H 元素)
+    // A. 氢元素节奏合成 (H 元素)
     if (this.nodes.beat.gain.gain.value > 0.01) {
-      if (step === 0 || step === 4 || step === 8 || step === 12) {
-        AudioSynthesizer.synthKick(this.audioCtx, this.nodes.beat.panner, time);
-      }
-      if (step === 2 || step === 6 || step === 10 || step === 14) {
-        AudioSynthesizer.synthHiHat(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
-      }
-      if (step === 8) {
-        AudioSynthesizer.synthSnare(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
+      const beatPreset = this.activePresets.beat;
+      if (beatPreset === 'minimal') {
+        if (step === 0 || step === 8) {
+          AudioSynthesizer.synthKick(this.audioCtx, this.nodes.beat.panner, time);
+        }
+        if (step === 4 || step === 12) {
+          AudioSynthesizer.synthHiHat(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
+        }
+      } else if (beatPreset === 'lofi') {
+        if (step === 0 || step === 10) {
+          AudioSynthesizer.synthKick(this.audioCtx, this.nodes.beat.panner, time);
+        }
+        if (step === 4 || step === 12) {
+          AudioSynthesizer.synthSnare(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
+        }
+        if (step % 2 === 0) {
+          AudioSynthesizer.synthHiHat(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
+        }
+      } else if (beatPreset === 'breakbeat') {
+        if (step === 0 || step === 6 || step === 10 || step === 14) {
+          AudioSynthesizer.synthKick(this.audioCtx, this.nodes.beat.panner, time);
+        }
+        if (step === 4 || step === 12) {
+          AudioSynthesizer.synthSnare(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
+        }
+        if (step % 2 === 0) {
+          AudioSynthesizer.synthHiHat(this.audioCtx, this.nodes.beat.panner, this.noiseBuffer, time);
+        }
       }
     }
 
-    // B. 旋律合成触发 (O 元素)
+    // B. 氧元素旋律合成 (O 元素)
     if (this.nodes.melody.gain.gain.value > 0.01) {
-      if (step % 2 === 0) {
-        const scale = this.scales[this.currentScale];
-        const melPattern = [0, 4, 2, 6, 1, 5, 3, 7, 4, 2, 5, 3, 0, 4, 1, 6];
-        const noteIndex = melPattern[step];
-        const freq = scale[noteIndex];
+      const melodyPreset = this.activePresets.melody;
+      const scale = this.scales[this.currentScale];
+      let freq = null;
+      
+      if (melodyPreset === 'ethereal') {
+        if (step % 2 === 0) {
+          const etherealPattern = [0, 2, 4, 7, 9, 7, 4, 2];
+          const patternIndex = Math.floor(step / 2) % etherealPattern.length;
+          const noteIndex = etherealPattern[patternIndex];
+          freq = scale[noteIndex % scale.length];
+        }
+      } else if (melodyPreset === 'waterflow') {
+        const waterflowPattern = [0, 4, 3, 5, 2, 6, 1, 7, 4, 3, 2, 5, 0, 1, 6, 4];
+        const noteIndex = waterflowPattern[step % waterflowPattern.length];
+        freq = scale[noteIndex % scale.length];
+      } else if (melodyPreset === 'starlight') {
+        // 每 3 步以较高几率触发高音粒子音
+        if (step % 3 === 0 && Math.random() > 0.4) {
+          const highNotes = [4, 5, 6, 7];
+          const randIndex = highNotes[Math.floor(Math.random() * highNotes.length)];
+          freq = scale[randIndex % scale.length] * 2; // 升高一个八度
+        }
+      }
+
+      if (freq) {
         AudioSynthesizer.synthPluck(this.audioCtx, this.nodes.melody.panner, freq, time);
       }
     }
 
-    // C. 和弦合成触发 (N 元素 - CHORD)
+    // C. 氮元素和弦合成 (N 元素 - CHORD)
     if (this.nodes.voice.gain.gain.value > 0.01) {
       if (step === 0) {
-        // 每 16 步（或每小节开头）触发一次温和的和弦背景音垫 (Chord Pad)
+        // 每小节开头触发一次和弦铺底
         this.synthChordPad(time);
       }
     }
@@ -316,13 +367,44 @@ export class SoundEngine {
   synthChordPad(time) {
     const ctx = this.audioCtx;
     const baseFreqs = this.scales[this.currentScale];
+    const N = baseFreqs.length;
+    const chordPreset = this.activePresets.chord;
     
-    // 根据当前音阶提取三个音符构成和谐的大/小三和弦 (根音、三音、五音)，根音降一个八度增强厚度
-    const chordNotes = [
-      baseFreqs[0] / 2, 
-      baseFreqs[2],     
-      baseFreqs[4]      
-    ];
+    let chordNotes = [];
+    if (chordPreset === 'heal') {
+      // I - vi - IV - V 级和弦循环
+      if (this.currentMeasure === 0) {
+        chordNotes = [baseFreqs[0] / 2, baseFreqs[2], baseFreqs[4]];
+      } else if (this.currentMeasure === 1) {
+        chordNotes = [baseFreqs[4] / 2, baseFreqs[0], baseFreqs[2]];
+      } else if (this.currentMeasure === 2) {
+        chordNotes = [baseFreqs[3] / 2, baseFreqs[5 % N], baseFreqs[0]];
+      } else {
+        chordNotes = [baseFreqs[4] / 2, baseFreqs[6 % N], baseFreqs[1]];
+      }
+    } else if (chordPreset === 'space') {
+      // 挂留悬浮和弦循环
+      if (this.currentMeasure === 0) {
+        chordNotes = [baseFreqs[0] / 2, baseFreqs[1], baseFreqs[4]];
+      } else if (this.currentMeasure === 1) {
+        chordNotes = [baseFreqs[3] / 2, baseFreqs[4], baseFreqs[0]];
+      } else if (this.currentMeasure === 2) {
+        chordNotes = [baseFreqs[4] / 2, baseFreqs[5 % N], baseFreqs[1]];
+      } else {
+        chordNotes = [baseFreqs[4] / 2, baseFreqs[0], baseFreqs[3]];
+      }
+    } else if (chordPreset === 'deepsea') {
+      // 平行四五度神秘和弦
+      if (this.currentMeasure === 0) {
+        chordNotes = [baseFreqs[0] / 2, baseFreqs[3], baseFreqs[5 % N]];
+      } else if (this.currentMeasure === 1) {
+        chordNotes = [baseFreqs[2] / 2, baseFreqs[5 % N], baseFreqs[7 % N]];
+      } else if (this.currentMeasure === 2) {
+        chordNotes = [baseFreqs[1] / 2, baseFreqs[4], baseFreqs[6 % N]];
+      } else {
+        chordNotes = [baseFreqs[3] / 2, baseFreqs[6 % N], baseFreqs[0] * 2];
+      }
+    }
 
     chordNotes.forEach(freq => {
       const osc = ctx.createOscillator();
@@ -335,13 +417,10 @@ export class SoundEngine {
 
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(300, time);
-      // 截止频率随时间轻微指数下滑，制造温暖自然的衰减感
       filter.frequency.exponentialRampToValueAtTime(150, time + 2.5);
 
       gain.gain.setValueAtTime(0.0, time);
-      // 0.5秒缓慢淡入，消除起音爆音
       gain.gain.linearRampToValueAtTime(0.2, time + 0.5);
-      // 2.6秒缓慢淡出
       gain.gain.exponentialRampToValueAtTime(0.001, time + 2.6);
 
       osc.connect(filter);
@@ -351,5 +430,115 @@ export class SoundEngine {
       osc.start(time);
       osc.stop(time + 2.7);
     });
+  }
+
+  /**
+   * 热加载外界录制的环境音采样
+   * @param {AudioBuffer} audioBuffer 麦克风录制的 PCM 音频缓冲
+   */
+  loadCustomAmbientBuffer(audioBuffer) {
+    if (!this.isPlaying || !this.audioCtx) return;
+    this.customAmbientBuffer = audioBuffer;
+    
+    // 如果当前氛围音轨正在播放，执行热切换
+    if (this.ambientSource) {
+      try { this.ambientSource.stop(); } catch(e) {}
+      this.ambientSource.disconnect();
+    }
+    
+    const ctx = this.audioCtx;
+    this.ambientSource = ctx.createBufferSource();
+    this.ambientSource.buffer = audioBuffer;
+    this.ambientSource.loop = true;
+    this.ambientSource.connect(this.ambientFilter);
+    this.ambientSource.start();
+  }
+
+  /**
+   * 更新碳元素的氛围声音预设
+   * @param {string} presetName 氛围声音预设名称 (respiration | tides | recorded)
+   */
+  updateAmbientPreset(presetName) {
+    if (!this.isPlaying || !this.audioCtx) return;
+    this.activePresets.ambient = presetName;
+    
+    if (presetName === 'tides') {
+      // 潮汐预设：扫频周期拉长
+      this.ambientLfo.frequency.setTargetAtTime(0.05, this.audioCtx.currentTime, 1.0);
+    } else {
+      // 恢复常规呼吸起伏周期
+      this.ambientLfo.frequency.setTargetAtTime(0.15, this.audioCtx.currentTime, 1.0);
+    }
+    
+    // 如果切换为录音模式且有录音数据
+    if (presetName === 'recorded') {
+      if (this.customAmbientBuffer) {
+        this.loadCustomAmbientBuffer(this.customAmbientBuffer);
+      }
+    } else {
+      // 恢复为默认白噪声循环
+      if (this.ambientSource) {
+        try { this.ambientSource.stop(); } catch(e) {}
+        this.ambientSource.disconnect();
+      }
+      const ctx = this.audioCtx;
+      this.ambientSource = ctx.createBufferSource();
+      this.ambientSource.buffer = this.noiseBuffer;
+      this.ambientSource.loop = true;
+      this.ambientSource.connect(this.ambientFilter);
+      this.ambientSource.start();
+    }
+  }
+
+  /**
+   * 实时键盘演奏发声接口 (按 A-K 键触发)
+   * @param {number} pitchIndex 对应音阶中第几个音符 (0-7)
+   */
+  playManualNote(pitchIndex) {
+    if (!this.isPlaying || !this.audioCtx) return;
+    const ctx = this.audioCtx;
+    const scale = this.scales[this.currentScale];
+    
+    // 映射到音阶内的基频
+    const freq = scale[pitchIndex % scale.length];
+    
+    // 通过旋律声像节点实时触发高灵敏度的拨弦合成音
+    AudioSynthesizer.synthPluck(ctx, this.nodes.melody.panner, freq, ctx.currentTime);
+  }
+
+  /**
+   * 实时沙盘点击发声接口 (根据点击物理位置合成 3D 空间音符)
+   * @param {number} x 点击点 X
+   * @param {number} y 点击点 Y
+   * @param {number} centerX 沙盘中心 X
+   * @param {number} centerY 沙盘中心 Y
+   * @param {number} radius 沙盘监听半径
+   */
+  playClickNote(x, y, centerX, centerY, radius) {
+    if (!this.isPlaying || !this.audioCtx) return;
+    const ctx = this.audioCtx;
+    
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // 距离中心越近，音高越高。离边缘越近，音高越低
+    const scale = this.scales[this.currentScale];
+    const maxDist = radius;
+    const ratio = Math.max(0, Math.min(1, distance / maxDist));
+    const pitchIndex = Math.floor((1 - ratio) * scale.length);
+    const freq = scale[Math.max(0, Math.min(scale.length - 1, pitchIndex))];
+    
+    // 动态创建一次性空间声像定位器，保留点击处的 3D 二维声像效果
+    const clickPanner = ctx.createPanner();
+    SpatialAudio.updatePannerPosition(clickPanner, dx / radius, dy / radius, ctx);
+    
+    const clickGain = ctx.createGain();
+    clickGain.gain.setValueAtTime(0.4, ctx.currentTime);
+    
+    clickPanner.connect(clickGain);
+    clickGain.connect(this.analyser);
+    
+    AudioSynthesizer.synthPluck(ctx, clickPanner, freq, ctx.currentTime);
   }
 }

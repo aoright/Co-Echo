@@ -13,6 +13,7 @@ export class CanvasRenderer {
   constructor(canvasElement) {
     this.canvas = canvasElement;
     this.ctx = this.canvas.getContext('2d');
+    this.ripples = [];
   }
 
   /**
@@ -20,6 +21,45 @@ export class CanvasRenderer {
    */
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  /**
+   * 添加实时涟漪波纹
+   */
+  addRipple(x, y, color = 'rgba(17, 17, 17, 0.4)', maxRadius = 120) {
+    this.ripples.push({
+      x,
+      y,
+      radius: 8,
+      maxRadius,
+      opacity: 0.8,
+      color
+    });
+  }
+
+  /**
+   * 绘制所有正在运动的涟漪圆环并更新参数
+   */
+  drawRipples() {
+    const ctx = this.ctx;
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const r = this.ripples[i];
+      // 采用阻尼缓动扩大半径
+      r.radius += (r.maxRadius - r.radius) * 0.08;
+      // 线性递减不透明度
+      r.opacity -= 0.025;
+
+      if (r.opacity <= 0 || r.radius >= r.maxRadius - 2) {
+        this.ripples.splice(i, 1);
+        continue;
+      }
+
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(17, 17, 17, ${r.opacity})`;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
   }
 
   /**

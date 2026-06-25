@@ -54,6 +54,51 @@
         </div>
 
         <div class="panel-section">
+          <h2>外界声音采集 / CAPTURE</h2>
+          <p class="panel-desc">录制身边的有机环境音（限时4秒），替换碳元素的背景氛围。</p>
+          <button id="btn-record-ambient" class="btn btn-secondary" disabled>
+            <span id="btn-ambient-text">采集外界环境声</span>
+          </button>
+        </div>
+
+        <div class="panel-section">
+          <h2>乐音预设 / PRESETS</h2>
+          <p class="panel-desc">调整四大声音化学元素的声轨模式与和声结构。</p>
+          <div class="select-group">
+            <label for="select-beat-preset">氢 / BEAT 节奏</label>
+            <select id="select-beat-preset" disabled>
+              <option value="minimal">极简律动 (Minimal)</option>
+              <option value="lofi">慵懒爵士 (Lo-Fi)</option>
+              <option value="breakbeat">灵动碎拍 (Breakbeat)</option>
+            </select>
+          </div>
+          <div class="select-group">
+            <label for="select-melody-preset">氧 / MELODY 旋律</label>
+            <select id="select-melody-preset" disabled>
+              <option value="ethereal">空灵琶音 (Ethereal)</option>
+              <option value="waterflow">流水之歌 (Waterflow)</option>
+              <option value="starlight">星光闪烁 (Starlight)</option>
+            </select>
+          </div>
+          <div class="select-group">
+            <label for="select-chord-preset">氮 / CHORD 和弦</label>
+            <select id="select-chord-preset" disabled>
+              <option value="heal">治愈和弦 (Heal)</option>
+              <option value="space">太空漂浮 (Space)</option>
+              <option value="deepsea">深海之影 (Deep Sea)</option>
+            </select>
+          </div>
+          <div class="select-group">
+            <label for="select-ambient-preset">碳 / AMBIENT 氛围</label>
+            <select id="select-ambient-preset" disabled>
+              <option value="respiration">呼吸白噪 (Respiration)</option>
+              <option value="tides">正弦潮汐 (Tides)</option>
+              <option value="recorded">自定义采样 (Recorded)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-section">
           <h2>AI 调剂 / AI ALCHEMIST</h2>
           <p class="panel-desc">输入情绪或场景，由 Qwen 智能调配沙盘坐标并合成治愈短诗。</p>
           <textarea id="ai-prompt-input" class="textarea-field" placeholder="例如：深夜大雨中的孤独、清晨海滩的阳光..." disabled></textarea>
@@ -186,6 +231,18 @@
           <div class="rule-card">
             <span class="formula">H + O + N + C = 完美共鸣</span>
             <p>四种元素在近距离汇聚，音效融合，粒子环绕效果达到顶峰。</p>
+          </div>
+        </div>
+
+        <div class="panel-section chemistry-rules">
+          <h3>交互弹奏玩法</h3>
+          <div class="rule-card">
+            <span class="formula">按 A - K 键演奏音级</span>
+            <p>在共鸣空间中，按电脑键盘的 A, S, D, F, G, H, J, K 键可像玩乐器般实时弹奏音符。</p>
+          </div>
+          <div class="rule-card">
+            <span class="formula">点击沙盘背景触发涟漪</span>
+            <p>鼠标点击沙盘的空白背景，即可在对应物理坐标处实时产生涟漪音效。</p>
           </div>
         </div>
       </section>

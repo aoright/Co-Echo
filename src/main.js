@@ -2,11 +2,13 @@ import { SoundEngine } from './core/SoundEngine.js';
 import { PhysicsLerp } from './algorithms/PhysicsLerp.js';
 import { CollisionEngine } from './algorithms/CollisionEngine.js';
 import { MasterRecorder } from './algorithms/MasterRecorder.js';
+import { AmbientRecorder } from './algorithms/AmbientRecorder.js';
 import { Visualizer } from './ui/Visualizer.js';
 import { CanvasRenderer } from './ui/CanvasRenderer.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const engine = new SoundEngine();
+  const ambientRecorder = new AmbientRecorder();
   let masterRecorder = null;
 
   // DOM 节点获取
@@ -15,6 +17,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExportRecording = document.getElementById('btn-export-recording');
   const btnExportText = document.getElementById('btn-export-text');
   
+  // 环境音录音与预设节点获取
+  const btnRecordAmbient = document.getElementById('btn-record-ambient');
+  const btnAmbientText = document.getElementById('btn-ambient-text');
+  const selectBeatPreset = document.getElementById('select-beat-preset');
+  const selectMelodyPreset = document.getElementById('select-melody-preset');
+  const selectChordPreset = document.getElementById('select-chord-preset');
+  const selectAmbientPreset = document.getElementById('select-ambient-preset');
+
   // AI 节点获取
   const aiPromptInput = document.getElementById('ai-prompt-input');
   const aiKeyInput = document.getElementById('ai-key-input');
@@ -95,6 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
         sliderBpm.removeAttribute('disabled');
         selectScale.removeAttribute('disabled');
         btnExportRecording.removeAttribute('disabled');
+        btnRecordAmbient.removeAttribute('disabled');
+        selectBeatPreset.removeAttribute('disabled');
+        selectMelodyPreset.removeAttribute('disabled');
+        selectChordPreset.removeAttribute('disabled');
+        selectAmbientPreset.removeAttribute('disabled');
         aiPromptInput.removeAttribute('disabled');
         aiKeyInput.removeAttribute('disabled');
         btnAiTune.removeAttribute('disabled');
@@ -129,6 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
       sliderBpm.setAttribute('disabled', 'true');
       selectScale.setAttribute('disabled', 'true');
       btnExportRecording.setAttribute('disabled', 'true');
+      btnRecordAmbient.setAttribute('disabled', 'true');
+      selectBeatPreset.setAttribute('disabled', 'true');
+      selectMelodyPreset.setAttribute('disabled', 'true');
+      selectChordPreset.setAttribute('disabled', 'true');
+      selectAmbientPreset.setAttribute('disabled', 'true');
       aiPromptInput.setAttribute('disabled', 'true');
       aiKeyInput.setAttribute('disabled', 'true');
       btnAiTune.setAttribute('disabled', 'true');
@@ -230,6 +250,114 @@ document.addEventListener('DOMContentLoaded', () => {
       btnAiTune.removeAttribute('disabled');
       btnAiText.textContent = "智能调谐声场";
     });
+  });
+
+  // 2. 乐音预设与环境音采集控制
+  selectBeatPreset.addEventListener('change', (e) => {
+    engine.activePresets.beat = e.target.value;
+    addLog(`[预设变更] 氢(BEAT) 节奏模式已切换为: ${selectBeatPreset.options[selectBeatPreset.selectedIndex].text}`, "interaction");
+  });
+
+  selectMelodyPreset.addEventListener('change', (e) => {
+    engine.activePresets.melody = e.target.value;
+    addLog(`[预设变更] 氧(MELODY) 旋律模式已切换为: ${selectMelodyPreset.options[selectMelodyPreset.selectedIndex].text}`, "interaction");
+  });
+
+  selectChordPreset.addEventListener('change', (e) => {
+    engine.activePresets.chord = e.target.value;
+    addLog(`[预设变更] 氮(CHORD) 和弦模式已切换为: ${selectChordPreset.options[selectChordPreset.selectedIndex].text}`, "interaction");
+  });
+
+  selectAmbientPreset.addEventListener('change', (e) => {
+    engine.updateAmbientPreset(e.target.value);
+    addLog(`[预设变更] 碳(AMBIENT) 氛围模式已切换为: ${selectAmbientPreset.options[selectAmbientPreset.selectedIndex].text}`, "interaction");
+  });
+
+  let isRecordingAmbient = false;
+  btnRecordAmbient.addEventListener('click', () => {
+    if (!engine.isPlaying) return;
+
+    if (!isRecordingAmbient) {
+      isRecordingAmbient = true;
+      btnRecordAmbient.classList.remove('btn-secondary');
+      btnRecordAmbient.classList.add('btn-recording');
+      btnAmbientText.textContent = "录制中...";
+      addLog("[外界采集] 麦克风已启动，请对着麦克风发出声音（限时4秒）...", "system");
+
+      ambientRecorder.record(engine.audioCtx, 4000, (timeLeft) => {
+        btnAmbientText.textContent = `录制中 (${timeLeft}s)...`;
+      })
+      .then(audioBuffer => {
+        engine.loadCustomAmbientBuffer(audioBuffer);
+        selectAmbientPreset.value = 'recorded';
+        engine.activePresets.ambient = 'recorded';
+        addLog("[外界采集] 环境声采集完毕，已将其循环融合入碳(AMBIENT)氛围声部。", "interaction");
+        resetAmbientUI();
+      })
+      .catch(err => {
+        addLog(`[采集失败] 环境音录制出错: ${err.message}`, "system");
+        resetAmbientUI();
+      });
+    } else {
+      ambientRecorder.abort();
+      resetAmbientUI();
+    }
+  });
+
+  function resetAmbientUI() {
+    isRecordingAmbient = false;
+    btnRecordAmbient.classList.remove('btn-recording');
+    btnRecordAmbient.classList.add('btn-secondary');
+    btnAmbientText.textContent = "采集外界环境声";
+  }
+
+  // 键盘乐器按键监听 (A-S-D-F-G-H-J-K)
+  const keysList = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK'];
+  window.addEventListener('keydown', (e) => {
+    if (!engine.isPlaying) return;
+    
+    // 如果焦点在输入框中，忽略键盘发声
+    if (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT') {
+      return;
+    }
+
+    const code = e.code;
+    if (keysList.includes(code)) {
+      e.preventDefault();
+      const pitchIndex = keysList.indexOf(code);
+      engine.playManualNote(pitchIndex);
+
+      // 在中心 Listener 位置渲染冲击波
+      sandboxRect = sandbox.getBoundingClientRect();
+      const cX = sandboxRect.width / 2;
+      const cY = sandboxRect.height / 2;
+      renderer.addRipple(cX, cY, 'rgba(17, 17, 17, 0.4)', 160);
+
+      addLog(`[键盘演奏] 弹奏音阶级数: ${pitchIndex + 1}`, "interaction");
+    }
+  });
+
+  // 沙盘空白处点击涟漪与实时发音
+  canvas.addEventListener('mousedown', (e) => {
+    if (!engine.isPlaying) return;
+    if (dragKey) return; // 如果正在拖拽气泡，不触发点击弹奏
+
+    // 如果点击的是气泡或中心监听者，则不触发
+    if (e.target.closest('.element') || e.target.closest('.listener-node')) {
+      return;
+    }
+
+    sandboxRect = sandbox.getBoundingClientRect();
+    const clickX = e.clientX - sandboxRect.left;
+    const clickY = e.clientY - sandboxRect.top;
+
+    const cX = sandboxRect.width / 2;
+    const cY = sandboxRect.height / 2;
+
+    engine.playClickNote(clickX, clickY, cX, cY, sandboxRadius);
+    renderer.addRipple(clickX, clickY, 'rgba(17, 17, 17, 0.3)', 120);
+
+    addLog("[沙盘共鸣] 空白空间受击，激发一次 3D 偏置弹奏音符。", "interaction");
   });
 
   // 3. 作品录音与导出控制
@@ -377,6 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderer.clear();
     simulateMultiplayer(timestamp);
+    renderer.drawRipples();
 
     const cX = canvas.width / 2;
     const cY = canvas.height / 2;
