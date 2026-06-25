@@ -5,6 +5,7 @@ import { MasterRecorder } from './algorithms/MasterRecorder.js';
 import { AmbientRecorder } from './algorithms/AmbientRecorder.js';
 import { Visualizer } from './ui/Visualizer.js';
 import { CanvasRenderer } from './ui/CanvasRenderer.js';
+import { SpatialAudio } from './algorithms/SpatialAudio.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const engine = new SoundEngine();
@@ -338,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 沙盘空白处点击涟漪与实时发音
-  canvas.addEventListener('mousedown', (e) => {
+  sandbox.addEventListener('mousedown', (e) => {
     if (!engine.isPlaying) return;
     if (dragKey) return; // 如果正在拖拽气泡，不触发点击弹奏
 
