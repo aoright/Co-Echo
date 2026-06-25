@@ -36,9 +36,6 @@ export class SoundEngine {
     };
 
     this.recordingDest = null;
-    this.micRecordedBuffer = null;
-    this.voiceBufferSource = null;
-    this.aiVoiceSource = null;
     
     // 调度时钟参数
     this.schedulerTimer = null;
@@ -188,33 +185,7 @@ export class SoundEngine {
   startContinuousSounds() {
     const ctx = this.audioCtx;
 
-    // 1. 人声声部加载
-    if (this.micRecordedBuffer) {
-      this.voiceBufferSource = ctx.createBufferSource();
-      this.voiceBufferSource.buffer = this.micRecordedBuffer;
-      this.voiceBufferSource.loop = true;
-      this.voiceBufferSource.connect(this.nodes.voice.panner);
-      this.voiceBufferSource.start();
-    } else {
-      this.voiceOsc1 = ctx.createOscillator();
-      this.voiceOsc2 = ctx.createOscillator();
-      this.voiceFilter = ctx.createBiquadFilter();
-
-      this.voiceOsc1.type = 'sawtooth';
-      this.voiceOsc2.type = 'sawtooth';
-      this.voiceOsc1.frequency.value = 220; // A3
-      this.voiceOsc2.frequency.value = 220.5;
-
-      this.voiceFilter.type = 'lowpass';
-      this.voiceFilter.frequency.value = 350;
-
-      this.voiceOsc1.connect(this.voiceFilter);
-      this.voiceOsc2.connect(this.voiceFilter);
-      this.voiceFilter.connect(this.nodes.voice.panner);
-
-      this.voiceOsc1.start();
-      this.voiceOsc2.start();
-    }
+    // 1. 纯音乐合成：不涉及人声连续发声。和弦背景声部将由时钟管理器按节拍动态合成触发。
 
     // 2. 环境氛围（白噪声）
     this.ambientSource = ctx.createBufferSource();
@@ -248,69 +219,8 @@ export class SoundEngine {
     this.bassOsc.start();
   }
 
-  /**
-   * 重新载入录制的麦克风数据源
-   */
-  reloadVoiceSource() {
-    if (!this.isPlaying || !this.audioCtx) return;
-
-    if (this.voiceBufferSource) {
-      try { this.voiceBufferSource.stop(); } catch(e) {}
-      this.voiceBufferSource.disconnect();
-    }
-    if (this.voiceOsc1) {
-      try {
-        this.voiceOsc1.stop();
-        this.voiceOsc2.stop();
-      } catch(e) {}
-      this.voiceOsc1.disconnect();
-      this.voiceOsc2.disconnect();
-      this.voiceFilter.disconnect();
-    }
-
-    const ctx = this.audioCtx;
-    if (this.micRecordedBuffer) {
-      this.voiceBufferSource = ctx.createBufferSource();
-      this.voiceBufferSource.buffer = this.micRecordedBuffer;
-      this.voiceBufferSource.loop = true;
-      this.voiceBufferSource.connect(this.nodes.voice.panner);
-      this.voiceBufferSource.start();
-    }
-  }
-
-  /**
-   * 播放一首高品质 AI TTS 短诗，并进行三维空间定位与开口动画关联
-   * @param {AudioBuffer} audioBuffer 解码后的音频缓冲
-   * @param {Function} onStart 播放开始回调
-   * @param {Function} onEnded 播放结束回调
-   */
-  playAIVoice(audioBuffer, onStart, onEnded) {
-    if (!this.isPlaying || !this.audioCtx) return;
-
-    // 如果当前有正在播放的人声，先停止它
-    if (this.aiVoiceSource) {
-      try { this.aiVoiceSource.stop(); } catch (e) {}
-      this.aiVoiceSource.disconnect();
-    }
-
-    this.aiVoiceSource = this.audioCtx.createBufferSource();
-    this.aiVoiceSource.buffer = audioBuffer;
-    this.aiVoiceSource.connect(this.nodes.voice.panner);
-
-    this.aiVoiceSource.onended = () => {
-      if (onEnded) onEnded();
-      this.aiVoiceSource = null;
-    };
-
-    if (onStart) onStart();
-    this.aiVoiceSource.start();
-  }
-
   stopContinuousSounds() {
     try {
-      if (this.voiceOsc1) this.voiceOsc1.stop();
-      if (this.voiceOsc2) this.voiceOsc2.stop();
-      if (this.voiceBufferSource) this.voiceBufferSource.stop();
       if (this.ambientSource) this.ambientSource.stop();
       if (this.ambientLfo) this.ambientLfo.stop();
       if (this.bassOsc) this.bassOsc.stop();
@@ -361,6 +271,14 @@ export class SoundEngine {
         AudioSynthesizer.synthPluck(this.audioCtx, this.nodes.melody.panner, freq, time);
       }
     }
+
+    // C. 和弦合成触发 (N 元素 - CHORD)
+    if (this.nodes.voice.gain.gain.value > 0.01) {
+      if (step === 0) {
+        // 每 16 步（或每小节开头）触发一次温和的和弦背景音垫 (Chord Pad)
+        this.synthChordPad(time);
+      }
+    }
   }
 
   /**
@@ -379,17 +297,59 @@ export class SoundEngine {
   }
 
   /**
-   * 控制人声调制抖动
+   * 控制环境调制（原人声调制）
    */
   setVocalModulation(isActive) {
     if (!this.isPlaying || !this.audioCtx) return;
-
-    if (isActive && this.voiceFilter) {
-      const now = this.audioCtx.currentTime;
-      this.voiceFilter.frequency.cancelScheduledValues(now);
-      this.voiceFilter.frequency.setTargetAtTime(400 + Math.sin(now * 3) * 200, now, 0.1);
-    } else if (this.voiceFilter) {
-      this.voiceFilter.frequency.setTargetAtTime(350, this.audioCtx.currentTime, 0.5);
+    
+    // N (Chord) 与 C (Ambient) 靠近触发《冥想空间》时，加深背景噪声 LFO 的截止频率扫频深度
+    if (isActive) {
+      this.ambientLfoGain.gain.setValueAtTime(450, this.audioCtx.currentTime);
+    } else {
+      this.ambientLfoGain.gain.setValueAtTime(250, this.audioCtx.currentTime);
     }
+  }
+
+  /**
+   * 动态合成温和、空灵的背景和弦音垫 (Chord Pad)
+   */
+  synthChordPad(time) {
+    const ctx = this.audioCtx;
+    const baseFreqs = this.scales[this.currentScale];
+    
+    // 根据当前音阶提取三个音符构成和谐的大/小三和弦 (根音、三音、五音)，根音降一个八度增强厚度
+    const chordNotes = [
+      baseFreqs[0] / 2, 
+      baseFreqs[2],     
+      baseFreqs[4]      
+    ];
+
+    chordNotes.forEach(freq => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      // 使用三角波合成，比锯齿波更温和空灵，适合做 Pad 背景铺底
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(300, time);
+      // 截止频率随时间轻微指数下滑，制造温暖自然的衰减感
+      filter.frequency.exponentialRampToValueAtTime(150, time + 2.5);
+
+      gain.gain.setValueAtTime(0.0, time);
+      // 0.5秒缓慢淡入，消除起音爆音
+      gain.gain.linearRampToValueAtTime(0.2, time + 0.5);
+      // 2.6秒缓慢淡出
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 2.6);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.nodes.voice.panner);
+
+      osc.start(time);
+      osc.stop(time + 2.7);
+    });
   }
 }
