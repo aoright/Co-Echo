@@ -32,6 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAiTune = document.getElementById('btn-ai-tune');
   const btnAiText = document.getElementById('btn-ai-text');
   
+  // 从 localStorage 恢复已保存的 API Key 防止明文泄露
+  const savedApiKey = localStorage.getItem('co_echo_api_key');
+  if (savedApiKey) {
+    aiKeyInput.value = savedApiKey;
+  }
+  
   const roomStatusText = document.getElementById('room-status-text');
   const statusDot = document.querySelector('.status-dot');
   const recordingBadge = document.getElementById('recording-badge');
@@ -177,6 +183,9 @@ document.addEventListener('DOMContentLoaded', () => {
       addLog("[AI调剂] 请填写有效的百炼 API Key 密钥。", "system");
       return;
     }
+    
+    // 保存至本地 localStorage
+    localStorage.setItem('co_echo_api_key', apiKey);
     
     btnAiTune.setAttribute('disabled', 'true');
     btnAiText.textContent = "AI 调配中...";
