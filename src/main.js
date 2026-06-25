@@ -48,10 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 气泡气动参数与初始位置记录 (百分比)
   const bubblePhysics = {
-    beat: { currentX: 20, currentY: 25, targetX: 20, targetY: 25, dragging: false },
-    melody: { currentX: 80, currentY: 30, targetX: 80, targetY: 30, dragging: false },
-    voice: { currentX: 30, currentY: 75, targetX: 30, targetY: 75, dragging: false },
-    ambient: { currentX: 70, currentY: 70, targetX: 70, targetY: 70, dragging: false }
+    beat: { currentX: 20, currentY: 25, targetX: 20, targetY: 25, baseX: 20, baseY: 25, dragging: false },
+    melody: { currentX: 80, currentY: 30, targetX: 80, targetY: 30, baseX: 80, baseY: 30, dragging: false },
+    voice: { currentX: 30, currentY: 75, targetX: 30, targetY: 75, baseX: 30, baseY: 75, dragging: false },
+    ambient: { currentX: 70, currentY: 70, targetX: 70, targetY: 70, baseX: 70, baseY: 70, dragging: false }
   };
 
   const elements = {
@@ -236,6 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (bubblePhysics[key]) {
             bubblePhysics[key].targetX = pos.x;
             bubblePhysics[key].targetY = pos.y;
+            bubblePhysics[key].baseX = pos.x;
+            bubblePhysics[key].baseY = pos.y;
           }
         });
       }
@@ -475,6 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function stopDrag() {
     if (dragKey) {
       bubblePhysics[dragKey].dragging = false;
+      bubblePhysics[dragKey].baseX = bubblePhysics[dragKey].targetX;
+      bubblePhysics[dragKey].baseY = bubblePhysics[dragKey].targetY;
     }
     dragKey = null;
     document.removeEventListener('mousemove', dragMove);
@@ -489,14 +493,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (!bubblePhysics.beat.dragging && dragKey !== 'beat') {
       const beatOffsetScale = 6;
-      bubblePhysics.beat.targetX = 20 + Math.sin(timeScale) * beatOffsetScale;
-      bubblePhysics.beat.targetY = 25 + Math.cos(timeScale * 0.8) * beatOffsetScale;
+      const base = bubblePhysics.beat;
+      base.targetX = base.baseX + Math.sin(timeScale) * beatOffsetScale;
+      base.targetY = base.baseY + Math.cos(timeScale * 0.8) * beatOffsetScale;
     }
 
     if (!bubblePhysics.ambient.dragging && dragKey !== 'ambient') {
       const ambOffsetScale = 8;
-      bubblePhysics.ambient.targetX = 70 + Math.cos(timeScale * 0.6 + 1.2) * ambOffsetScale;
-      bubblePhysics.ambient.targetY = 70 + Math.sin(timeScale * 0.7) * ambOffsetScale;
+      const base = bubblePhysics.ambient;
+      base.targetX = base.baseX + Math.cos(timeScale * 0.6 + 1.2) * ambOffsetScale;
+      base.targetY = base.baseY + Math.sin(timeScale * 0.7) * ambOffsetScale;
     }
   }
 
